@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Relay Mobile</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <h1>Relay Mobile</h1>
+      <p class="sub">MQTT control for 16-relay ESP32</p>
+    </header>
+
+    <section class="card">
+      <h2>Connection</h2>
+      <label>Broker (WSS)
+        <input id="brokerUrl" type="text" value="wss://broker.hivemq.com:8884/mqtt" />
+      </label>
+      <label>Client ID
+        <input id="clientId" type="text" />
+      </label>
+      <details>
+        <summary>Topics</summary>
+        <label>Command
+          <input id="topicCmd" type="text" value="babu/esp32/cmd" />
+        </label>
+        <label>Schedule
+          <input id="topicSchedule" type="text" value="babu/esp32/schedule" />
+        </label>
+        <label>Status
+          <input id="topicStatus" type="text" value="babu/esp32/status" />
+        </label>
+        <label>Status Request
+          <input id="topicStatusReq" type="text" value="babu/esp32/statusreq" />
+        </label>
+      </details>
+      <div class="row">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+      </div>
+      <p id="connectionState" class="state bad">Disconnected</p>
+    </section>
+
+    <section class="card">
+      <h2>Relays</h2>
+      <div id="relayGrid" class="relay-grid"></div>
+      <div class="snapshot">
+        <p>Selected: <strong id="selectedRelayLabel">Relay 1</strong></p>
+        <p>State: <span id="currentRelayState" class="pill unknown">Unknown</span></p>
+        <p>Schedule: <span id="currentRelaySchedule">No data</span></p>
+      </div>
+      <div class="row">
+        <button id="turnOnBtn">Turn ON</button>
+        <button id="turnOffBtn" class="secondary">Turn OFF</button>
+      </div>
+      <div class="row">
+        <button id="fetchStatusBtn" class="ghost">Fetch Status</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Set Schedule</h2>
+      <div id="dayChips" class="chips"></div>
+      <div class="time-grid">
+        <label>ON
+          <input id="onTime" type="time" value="08:00" />
+        </label>
+        <label>OFF
+          <input id="offTime" type="time" value="20:00" />
+        </label>
+      </div>
+      <button id="setScheduleBtn">Save Schedule</button>
+      <p class="hint">Format sent: relay days HH:MM-HH:MM</p>
+    </section>
+
+    <section class="card">
+      <h2>Status Feed</h2>
+      <pre id="statusOutput" class="panel">No status yet.</pre>
+    </section>
+
+    <section class="card">
+      <h2>Log</h2>
+      <pre id="logOutput" class="panel">Ready.</pre>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

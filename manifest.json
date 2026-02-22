@@ -1,0 +1,11 @@
+{
+  "id": "./",
+  "name": "Relay Mobile",
+  "short_name": "RelayMobile",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef3f8",
+  "theme_color": "#0f766e",
+  "description": "Mobile MQTT controller for ESP32 16-relay board"
+}
