@@ -33,6 +33,9 @@ const relayData = Array.from({ length: RELAY_COUNT }, () => ({
   state: "UNKNOWN",
   scheduleText: "No data",
 }));
+const MAX_LOG_LINES = 200;
+const MAX_LOG_CHARS = 8000;
+const logBuffer = [];
 
 function initUi() {
   clientIdEl.value = `mobile-${Math.random().toString(16).slice(2, 10)}`;
@@ -72,7 +75,15 @@ function setConnState(text, ok) {
 
 function log(msg) {
   const ts = new Date().toLocaleTimeString();
-  logOutputEl.textContent = `[${ts}] ${msg}\n${logOutputEl.textContent}`.slice(0, 9000);
+  logBuffer.push(`[${ts}] ${msg}`);
+  if (logBuffer.length > MAX_LOG_LINES) {
+    logBuffer.splice(0, logBuffer.length - MAX_LOG_LINES);
+  }
+  let joined = logBuffer.join("\n");
+  if (joined.length > MAX_LOG_CHARS) {
+    joined = joined.slice(joined.length - MAX_LOG_CHARS);
+  }
+  logOutputEl.textContent = joined;
 }
 
 function ensureConnected() {
@@ -185,8 +196,10 @@ function connectMqtt() {
   client = mqtt.connect(brokerUrlEl.value.trim(), {
     clientId: clientIdEl.value.trim() || `mobile-${Math.random().toString(16).slice(2, 10)}`,
     clean: true,
+    keepalive: 30,
     reconnectPeriod: 2500,
     connectTimeout: 10000,
+    resubscribe: true,
   });
 
   setConnState("Connecting...", false);
@@ -216,6 +229,7 @@ function connectMqtt() {
   });
 
   client.on("reconnect", () => setConnState("Reconnecting...", false));
+  client.on("offline", () => setConnState("Offline", false));
   client.on("error", (err) => {
     setConnState("Error/Disconnected", false);
     log(`MQTT error: ${err.message}`);
@@ -270,3 +284,23 @@ fetchStatusBtn.addEventListener("click", fetchStatus);
 setScheduleBtn.addEventListener("click", saveSchedule);
 
 initUi();
+
+window.addEventListener("online", () => {
+  log("Network online");
+  if (client && !client.connected) {
+    client.reconnect();
+  }
+});
+
+window.addEventListener("offline", () => {
+  log("Network offline");
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    log("App visible");
+    if (client && !client.connected) {
+      client.reconnect();
+    }
+  }
+});
