@@ -1,7 +1,7 @@
 # MQTT Mobile WebApp (GitHub Pages Ready)
 
 Folder:
-`/Users/vsundarraj/Documents/Arduino/mqtt-mobile-webapp`
+`/Users/vsundarraj/Documents/Arduino/farm-mqtt`
 
 ## What this app does
 - Mobile-first UI (iPhone + Android)
@@ -16,7 +16,7 @@ Folder:
 
 ### Option A (Recommended): put these files at repo root
 1. Create a new GitHub repo (public).
-2. Upload all files from `mqtt-mobile-webapp` into the root of repo.
+2. Upload all files from `farm-mqtt` into the root of repo.
 3. GitHub repo -> Settings -> Pages.
 4. Source: `Deploy from a branch`.
 5. Branch: `main` and folder `/ (root)`.
@@ -26,9 +26,9 @@ Folder:
 
 ### Option B: keep files inside `/mqtt-mobile-webapp` folder in repo
 1. Upload folder as `mqtt-mobile-webapp`.
-2. In Settings -> Pages, set folder to `/mqtt-mobile-webapp` (if available in your Pages UI).
+2. In Settings -> Pages, set folder to `/farm-mqtt` (if available in your Pages UI).
 3. Open:
-   `https://<username>.github.io/<repo>/mqtt-mobile-webapp/`
+   `https://<username>.github.io/<repo>/farm-mqtt/`
 
 If your Pages UI only supports `/root` or `/docs`, use Option A, or move folder content into `/docs`.
 
@@ -47,3 +47,6 @@ If your Pages UI only supports `/root` or `/docs`, use Option A, or move folder 
 ## Important
 - The app must be opened via HTTPS (GitHub Pages gives this).
 - ESP32 and phone can be on different networks; both only need internet access to the same public broker and topics.
+
+## Push notifications (state change alerts)
+Push notifications require a small server that listens to MQTT and sends notifications. See `push-server/README.md`.
