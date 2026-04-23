@@ -8,6 +8,8 @@ const topicCmdEl = document.getElementById("topicCmd");
 const topicScheduleEl = document.getElementById("topicSchedule");
 const topicStatusEl = document.getElementById("topicStatus");
 const topicStatusReqEl = document.getElementById("topicStatusReq");
+const topicTimerEl = document.getElementById("topicTimer");
+const topicCyclicEl = document.getElementById("topicCyclic");
 
 const TOPIC_BASES = {
   prod: "babu/esp32",
@@ -26,7 +28,10 @@ const relayGridEl = document.getElementById("relayGrid");
 const dayChipsEl = document.getElementById("dayChips");
 const selectedRelayLabelEl = document.getElementById("selectedRelayLabel");
 const currentRelayStateEl = document.getElementById("currentRelayState");
+const currentRelayModeEl = document.getElementById("currentRelayMode");
 const currentRelayScheduleEl = document.getElementById("currentRelaySchedule");
+const currentRelayTimerRow = document.getElementById("currentRelayTimerRow");
+const currentRelayTimerEl = document.getElementById("currentRelayTimer");
 const onTimeEl = document.getElementById("onTime");
 const offTimeEl = document.getElementById("offTime");
 const statusOutputEl = document.getElementById("statusOutput");
@@ -34,13 +39,38 @@ const logOutputEl = document.getElementById("logOutput");
 const enableNotifBtn = document.getElementById("enableNotifBtn");
 const notifStateEl = document.getElementById("notifState");
 
+const timerMinEl = document.getElementById("timerMin");
+const timerSecEl = document.getElementById("timerSec");
+const startTimerBtn = document.getElementById("startTimerBtn");
+const cancelTimerBtn = document.getElementById("cancelTimerBtn");
+
+const cyclicDayChipsEl = document.getElementById("cyclicDayChips");
+const cyclicStartEl = document.getElementById("cyclicStart");
+const cyclicAddRelayEl = document.getElementById("cyclicAddRelay");
+const cyclicAddMinEl = document.getElementById("cyclicAddMin");
+const cyclicAddSecEl = document.getElementById("cyclicAddSec");
+const cyclicAddBtn = document.getElementById("cyclicAddBtn");
+const cyclicSeqListEl = document.getElementById("cyclicSeqList");
+const cyclicSaveBtn = document.getElementById("cyclicSaveBtn");
+const cyclicClearSeqBtn = document.getElementById("cyclicClearSeqBtn");
+const cyclicEnableBtn = document.getElementById("cyclicEnableBtn");
+const cyclicDisableBtn = document.getElementById("cyclicDisableBtn");
+const cyclicClearBtn = document.getElementById("cyclicClearBtn");
+const cyclicDeviceStateEl = document.getElementById("cyclicDeviceState");
+const cyclicDeviceSummaryEl = document.getElementById("cyclicDeviceSummary");
+
 let client = null;
 let selectedRelay = 1;
 
 const relayData = Array.from({ length: RELAY_COUNT }, () => ({
   state: "UNKNOWN",
+  mode: "SCHED",
   scheduleText: "No data",
+  timerText: "",
 }));
+
+// Editor-local cyclic sequence: [{ relay, minutes, seconds }]
+const cyclicSeq = [];
 const MAX_LOG_LINES = 200;
 const MAX_LOG_CHARS = 8000;
 const logBuffer = [];
@@ -55,6 +85,8 @@ function applyEnvironment(env) {
   topicScheduleEl.value = `${base}/schedule`;
   topicStatusEl.value = `${base}/status`;
   topicStatusReqEl.value = `${base}/statusreq`;
+  topicTimerEl.value = `${base}/timer`;
+  topicCyclicEl.value = `${base}/cyclic`;
 }
 
 function initUi() {
@@ -96,6 +128,26 @@ function initUi() {
     dayChipsEl.appendChild(b);
   });
 
+  // Cyclic day chips (independent from schedule chips)
+  DAYS.forEach((day) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "day-chip";
+    b.textContent = day;
+    b.dataset.day = day;
+    b.addEventListener("click", () => b.classList.toggle("active"));
+    cyclicDayChipsEl.appendChild(b);
+  });
+
+  // Cyclic relay dropdown
+  for (let i = 1; i <= RELAY_COUNT; i += 1) {
+    const opt = document.createElement("option");
+    opt.value = String(i);
+    opt.textContent = `R${i}`;
+    cyclicAddRelayEl.appendChild(opt);
+  }
+
+  renderCyclicSeq();
   selectRelay(1);
 }
 
@@ -256,6 +308,15 @@ function reflectScheduleToControls(scheduleText) {
   offTimeEl.value = parsed.offTime;
 }
 
+function modePillClass(mode) {
+  switch ((mode || "").toUpperCase()) {
+    case "MANUAL": return "pill mode-manual";
+    case "TIMER":  return "pill mode-timer";
+    case "CYCLIC": return "pill mode-cyclic";
+    default:       return "pill mode-sched";
+  }
+}
+
 function updateSelectedRelayView() {
   const info = relayData[selectedRelay - 1];
   if (!info) return;
@@ -265,28 +326,115 @@ function updateSelectedRelayView() {
   if (info.state === "ON") currentRelayStateEl.className = "pill on";
   if (info.state === "OFF") currentRelayStateEl.className = "pill off";
 
+  currentRelayModeEl.textContent = info.mode || "SCHED";
+  currentRelayModeEl.className = modePillClass(info.mode);
+
   currentRelayScheduleEl.textContent = info.scheduleText;
   reflectScheduleToControls(info.scheduleText);
+
+  if (info.timerText) {
+    currentRelayTimerRow.classList.remove("hidden");
+    currentRelayTimerEl.textContent = info.timerText;
+  } else {
+    currentRelayTimerRow.classList.add("hidden");
+  }
 }
 
 function parseStatusReport(text) {
   const lines = text.split("\n");
   let count = 0;
+  let inCyclic = false;
+  const cyclicLines = [];
 
   lines.forEach((line) => {
-    const m = line.match(/^Relay\s+(\d+)\s+\(Pin\s+\d+\)\s+(ON|OFF)\s+Schedule:\s*(.*)$/i);
-    if (!m) return;
-    const relayNum = Number(m[1]);
-    if (relayNum < 1 || relayNum > RELAY_COUNT) return;
+    if (/^----\s*Cyclic\s*----/i.test(line)) {
+      inCyclic = true;
+      return;
+    }
+    if (inCyclic) {
+      cyclicLines.push(line);
+      return;
+    }
 
-    relayData[relayNum - 1] = {
-      state: m[2].toUpperCase(),
-      scheduleText: (m[3] || "").trim() || "None",
-    };
-    count += 1;
+    // New format:  Relay N (Pin P) ON  [MODE] Schedule: ...   OR
+    //              Relay N (Pin P) ON  [TIMER] Timer: 5m30s (rem 2m10s)
+    const m = line.match(
+      /^Relay\s+(\d+)\s+\(Pin\s+-?\d+\)\s+(ON|OFF)\s+\[([A-Z]+)\]\s+(.*)$/i
+    );
+    if (m) {
+      const relayNum = Number(m[1]);
+      if (relayNum < 1 || relayNum > RELAY_COUNT) return;
+      const rest = (m[4] || "").trim();
+
+      let scheduleText = "None";
+      let timerText = "";
+      const tm = rest.match(/^Timer:\s*(.*)$/i);
+      const sm = rest.match(/^Schedule:\s*(.*)$/i);
+      if (tm) {
+        timerText = (tm[1] || "").trim();
+      } else if (sm) {
+        scheduleText = (sm[1] || "").trim() || "None";
+      }
+
+      relayData[relayNum - 1] = {
+        state: m[2].toUpperCase(),
+        mode: m[3].toUpperCase(),
+        scheduleText,
+        timerText,
+      };
+      count += 1;
+      return;
+    }
+
+    // Legacy format fallback
+    const legacy = line.match(
+      /^Relay\s+(\d+)\s+\(Pin\s+-?\d+\)\s+(ON|OFF)\s+Schedule:\s*(.*)$/i
+    );
+    if (legacy) {
+      const relayNum = Number(legacy[1]);
+      if (relayNum < 1 || relayNum > RELAY_COUNT) return;
+      relayData[relayNum - 1] = {
+        state: legacy[2].toUpperCase(),
+        mode: "SCHED",
+        scheduleText: (legacy[3] || "").trim() || "None",
+        timerText: "",
+      };
+      count += 1;
+    }
   });
 
+  if (cyclicLines.length > 0) parseCyclicBlock(cyclicLines);
   if (count > 0) updateSelectedRelayView();
+}
+
+function parseCyclicBlock(lines) {
+  // Line forms expected:
+  //   "Enabled  Days: MonWedFri  Start: 06:00"  OR  "Disabled" (+ optional second line)
+  //   "  Seq: R1(5m30s) -> R3(10m0s) -> R5(7m15s)"
+  //   "  Running: step 2/3 R3 rem 5m12s"
+  //   "  (not configured)"
+  const joined = lines.join("\n");
+  const enabled = /^Enabled\b/m.test(joined);
+  const running = /Running:\s*step\s+(\d+)\/(\d+)\s+R(\d+)\s+rem\s+(.*)/i.exec(joined);
+  const notConfigured = /\(not configured\)/i.test(joined);
+
+  let label = enabled ? "ENABLED" : "DISABLED";
+  if (running) label = `RUNNING ${running[1]}/${running[2]}`;
+
+  cyclicDeviceStateEl.textContent = label;
+  cyclicDeviceStateEl.className =
+    running ? "pill on" : (enabled ? "pill mode-cyclic" : "pill off");
+
+  if (notConfigured) {
+    cyclicDeviceSummaryEl.textContent = "Not configured on device.";
+    return;
+  }
+
+  // Compact single-line summary
+  const summaryLines = lines
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  cyclicDeviceSummaryEl.textContent = summaryLines.join(" | ");
 }
 
 function connectMqtt() {
@@ -374,6 +522,142 @@ function fetchStatus() {
   publish(topicStatusReqEl.value.trim(), "get");
 }
 
+// ---------- Timer ----------
+function startTimer() {
+  const m = Number(timerMinEl.value);
+  const s = Number(timerSecEl.value);
+  if (!Number.isFinite(m) || !Number.isFinite(s) || m < 0 || s < 0 || s > 59) {
+    log("Timer values out of range (sec 0-59).");
+    return;
+  }
+  if (m === 0 && s === 0) {
+    log("Timer must be > 0.");
+    return;
+  }
+  publish(topicTimerEl.value.trim(), `${selectedRelay} ${m} ${s}`);
+  setTimeout(fetchStatus, 500);
+}
+
+function cancelTimer() {
+  publish(topicTimerEl.value.trim(), `${selectedRelay} off`);
+  setTimeout(fetchStatus, 500);
+}
+
+// ---------- Cyclic ----------
+function selectedCyclicDays() {
+  const chips = cyclicDayChipsEl.querySelectorAll(".day-chip.active");
+  return Array.from(chips).map((c) => c.dataset.day);
+}
+
+function renderCyclicSeq() {
+  cyclicSeqListEl.innerHTML = "";
+  cyclicSeq.forEach((step, idx) => {
+    const li = document.createElement("li");
+    li.className = "seq-item";
+
+    const info = document.createElement("span");
+    info.className = "seq-info";
+    info.textContent = `R${step.relay} — ${step.minutes}m ${step.seconds}s`;
+
+    const actions = document.createElement("span");
+    actions.className = "seq-actions";
+
+    const up = document.createElement("button");
+    up.type = "button";
+    up.className = "ghost seq-btn";
+    up.textContent = "↑";
+    up.disabled = idx === 0;
+    up.addEventListener("click", () => moveCyclicStep(idx, -1));
+
+    const down = document.createElement("button");
+    down.type = "button";
+    down.className = "ghost seq-btn";
+    down.textContent = "↓";
+    down.disabled = idx === cyclicSeq.length - 1;
+    down.addEventListener("click", () => moveCyclicStep(idx, +1));
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "secondary seq-btn";
+    del.textContent = "×";
+    del.addEventListener("click", () => {
+      cyclicSeq.splice(idx, 1);
+      renderCyclicSeq();
+    });
+
+    actions.appendChild(up);
+    actions.appendChild(down);
+    actions.appendChild(del);
+
+    li.appendChild(info);
+    li.appendChild(actions);
+    cyclicSeqListEl.appendChild(li);
+  });
+}
+
+function moveCyclicStep(idx, delta) {
+  const j = idx + delta;
+  if (j < 0 || j >= cyclicSeq.length) return;
+  const tmp = cyclicSeq[idx];
+  cyclicSeq[idx] = cyclicSeq[j];
+  cyclicSeq[j] = tmp;
+  renderCyclicSeq();
+}
+
+function addCyclicStep() {
+  const r = Number(cyclicAddRelayEl.value);
+  const m = Number(cyclicAddMinEl.value);
+  const s = Number(cyclicAddSecEl.value);
+  if (!Number.isFinite(r) || r < 1 || r > RELAY_COUNT) {
+    log("Pick a valid relay.");
+    return;
+  }
+  if (!Number.isFinite(m) || !Number.isFinite(s) || m < 0 || s < 0 || s > 59) {
+    log("Cyclic step duration out of range (sec 0-59).");
+    return;
+  }
+  if (m === 0 && s === 0) {
+    log("Cyclic step duration must be > 0.");
+    return;
+  }
+  cyclicSeq.push({ relay: r, minutes: m, seconds: s });
+  renderCyclicSeq();
+}
+
+function saveCyclic() {
+  const days = selectedCyclicDays();
+  if (days.length === 0) {
+    log("Cyclic: pick at least one day.");
+    return;
+  }
+  if (!cyclicStartEl.value) {
+    log("Cyclic: start time required.");
+    return;
+  }
+  if (cyclicSeq.length === 0) {
+    log("Cyclic: add at least one step.");
+    return;
+  }
+  const list = cyclicSeq
+    .map((st) => `${st.relay}:${st.minutes}:${st.seconds}`)
+    .join(",");
+  const payload = `set ${days.join("")} ${cyclicStartEl.value} ${list}`;
+  publish(topicCyclicEl.value.trim(), payload);
+  setTimeout(fetchStatus, 500);
+}
+
+function enableCyclic()  { publish(topicCyclicEl.value.trim(), "enable");  setTimeout(fetchStatus, 500); }
+function disableCyclic() { publish(topicCyclicEl.value.trim(), "disable"); setTimeout(fetchStatus, 500); }
+function clearCyclicDevice() {
+  if (!confirm("Clear cyclic configuration on the device?")) return;
+  publish(topicCyclicEl.value.trim(), "clear");
+  setTimeout(fetchStatus, 500);
+}
+function clearCyclicEditor() {
+  cyclicSeq.length = 0;
+  renderCyclicSeq();
+}
+
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   navigator.serviceWorker.register("service-worker.js").catch(() => {});
 }
@@ -385,6 +669,16 @@ turnOffBtn.addEventListener("click", () => turnRelay(false));
 fetchStatusBtn.addEventListener("click", fetchStatus);
 setScheduleBtn.addEventListener("click", saveSchedule);
 if (enableNotifBtn) enableNotifBtn.addEventListener("click", enableNotifications);
+
+startTimerBtn.addEventListener("click", startTimer);
+cancelTimerBtn.addEventListener("click", cancelTimer);
+
+cyclicAddBtn.addEventListener("click", addCyclicStep);
+cyclicClearSeqBtn.addEventListener("click", clearCyclicEditor);
+cyclicSaveBtn.addEventListener("click", saveCyclic);
+cyclicEnableBtn.addEventListener("click", enableCyclic);
+cyclicDisableBtn.addEventListener("click", disableCyclic);
+cyclicClearBtn.addEventListener("click", clearCyclicDevice);
 
 initUi();
 checkNotificationStatus().catch(() => {});

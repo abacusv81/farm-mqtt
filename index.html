@@ -45,6 +45,12 @@
         <label>Status Request
           <input id="topicStatusReq" type="text" value="babu/esp32/statusreq" />
         </label>
+        <label>Timer
+          <input id="topicTimer" type="text" value="babu/esp32/timer" />
+        </label>
+        <label>Cyclic
+          <input id="topicCyclic" type="text" value="babu/esp32/cyclic" />
+        </label>
       </details>
       <div class="row">
         <button id="connectBtn">Connect</button>
@@ -67,8 +73,10 @@
       <div id="relayGrid" class="relay-grid"></div>
       <div class="snapshot">
         <p>Selected: <strong id="selectedRelayLabel">Relay 1</strong></p>
-        <p>State: <span id="currentRelayState" class="pill unknown">Unknown</span></p>
+        <p>State: <span id="currentRelayState" class="pill unknown">Unknown</span>
+          <span id="currentRelayMode" class="pill mode-sched">SCHED</span></p>
         <p>Schedule: <span id="currentRelaySchedule">No data</span></p>
+        <p id="currentRelayTimerRow" class="hidden">Timer: <span id="currentRelayTimer">-</span></p>
       </div>
       <div class="row">
         <button id="turnOnBtn">Turn ON</button>
@@ -92,6 +100,68 @@
       </div>
       <button id="setScheduleBtn">Save Schedule</button>
       <p class="hint">Format sent: relay days HH:MM-HH:MM</p>
+    </section>
+
+    <section class="card">
+      <h2>Timer (selected relay)</h2>
+      <p class="hint">Turns relay ON now and auto-OFF after the duration.</p>
+      <div class="time-grid">
+        <label>Minutes
+          <input id="timerMin" type="number" min="0" max="999" value="0" />
+        </label>
+        <label>Seconds
+          <input id="timerSec" type="number" min="0" max="59" value="30" />
+        </label>
+      </div>
+      <div class="row">
+        <button id="startTimerBtn">Start Timer</button>
+        <button id="cancelTimerBtn" class="secondary">Cancel Timer</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Cyclic Sequence</h2>
+      <p class="hint">Selected relays run in order, each for its own duration, once per scheduled trigger.</p>
+
+      <label>Days</label>
+      <div id="cyclicDayChips" class="chips"></div>
+      <label>Start time
+        <input id="cyclicStart" type="time" value="06:00" />
+      </label>
+
+      <div class="cyc-add">
+        <label>Relay
+          <select id="cyclicAddRelay"></select>
+        </label>
+        <div class="time-grid">
+          <label>Minutes
+            <input id="cyclicAddMin" type="number" min="0" max="999" value="5" />
+          </label>
+          <label>Seconds
+            <input id="cyclicAddSec" type="number" min="0" max="59" value="0" />
+          </label>
+        </div>
+        <button id="cyclicAddBtn" class="ghost">Add Step</button>
+      </div>
+
+      <ol id="cyclicSeqList" class="seq-list"></ol>
+
+      <div class="row">
+        <button id="cyclicSaveBtn">Save &amp; Enable</button>
+        <button id="cyclicClearSeqBtn" class="ghost">Clear Editor</button>
+      </div>
+      <div class="row">
+        <button id="cyclicEnableBtn" class="secondary">Enable</button>
+        <button id="cyclicDisableBtn" class="secondary">Disable</button>
+      </div>
+      <div class="row">
+        <button id="cyclicClearBtn" class="ghost">Clear On Device</button>
+      </div>
+
+      <div class="snapshot">
+        <p>Device: <span id="cyclicDeviceState" class="pill unknown">Unknown</span></p>
+        <p id="cyclicDeviceSummary" class="hint">No device data.</p>
+      </div>
     </section>
 
     <section class="card">

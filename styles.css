@@ -180,6 +180,79 @@ button:disabled {
   background: #637487;
 }
 
+.pill.mode-sched {
+  background: #4a6b8a;
+}
+
+.pill.mode-manual {
+  background: #8a6d3b;
+}
+
+.pill.mode-timer {
+  background: #b9472a;
+}
+
+.pill.mode-cyclic {
+  background: #5d3b9c;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.cyc-add {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.cyc-add > button {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.seq-list {
+  list-style: decimal inside;
+  margin: 8px 0;
+  padding: 0;
+}
+
+.seq-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7fbff;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.seq-info {
+  flex: 1;
+  color: #23374a;
+  font-weight: 600;
+}
+
+.seq-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.seq-btn {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  min-width: 32px;
+}
+
+.seq-btn:disabled {
+  opacity: 0.4;
+}
+
 .chips {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));

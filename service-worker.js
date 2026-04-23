@@ -1,4 +1,4 @@
-const CACHE_NAME = "relay-mobile-v2";
+const CACHE_NAME = "relay-mobile-v3";
 const ASSETS = [
   "./",
   "./index.html",
