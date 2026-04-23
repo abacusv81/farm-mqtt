@@ -22,6 +22,12 @@
       <label>Broker (WSS)
         <input id="brokerUrl" type="text" value="wss://broker.hivemq.com:8884/mqtt" />
       </label>
+      <label>Environment
+        <select id="environment">
+          <option value="prod">Production (babu/esp32)</option>
+          <option value="test">Test (babu/esp32-test)</option>
+        </select>
+      </label>
       <label>Client ID
         <input id="clientId" type="text" />
       </label>
@@ -45,6 +51,15 @@
         <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
       </div>
       <p id="connectionState" class="state bad">Disconnected</p>
+    </section>
+
+    <section class="card">
+      <h2>Notifications</h2>
+      <p class="hint">Enable push notifications for relay state changes (install app to Home Screen).</p>
+      <div class="row">
+        <button id="enableNotifBtn">Enable Notifications</button>
+      </div>
+      <p id="notifState" class="state bad">Not enabled</p>
     </section>
 
     <section class="card">
