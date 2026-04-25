@@ -253,6 +253,46 @@ button:disabled {
   opacity: 0.4;
 }
 
+.interval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.interval-row {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #f7fbff;
+}
+
+.interval-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.interval-label {
+  font-weight: 700;
+  color: #23374a;
+}
+
+.interval-row .chips {
+  margin-bottom: 8px;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.button-row > button {
+  flex: 1;
+}
+
 .chips {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));

@@ -25,15 +25,15 @@ const setScheduleBtn = document.getElementById("setScheduleBtn");
 
 const connectionStateEl = document.getElementById("connectionState");
 const relayGridEl = document.getElementById("relayGrid");
-const dayChipsEl = document.getElementById("dayChips");
+const scheduleIntervalsEl = document.getElementById("scheduleIntervals");
+const addIntervalBtn = document.getElementById("addIntervalBtn");
+const clearIntervalsBtn = document.getElementById("clearIntervalsBtn");
 const selectedRelayLabelEl = document.getElementById("selectedRelayLabel");
 const currentRelayStateEl = document.getElementById("currentRelayState");
 const currentRelayModeEl = document.getElementById("currentRelayMode");
 const currentRelayScheduleEl = document.getElementById("currentRelaySchedule");
 const currentRelayTimerRow = document.getElementById("currentRelayTimerRow");
 const currentRelayTimerEl = document.getElementById("currentRelayTimer");
-const onTimeEl = document.getElementById("onTime");
-const offTimeEl = document.getElementById("offTime");
 const statusOutputEl = document.getElementById("statusOutput");
 const logOutputEl = document.getElementById("logOutput");
 const enableNotifBtn = document.getElementById("enableNotifBtn");
@@ -67,7 +67,12 @@ const relayData = Array.from({ length: RELAY_COUNT }, () => ({
   mode: "SCHED",
   scheduleText: "No data",
   timerText: "",
+  scheduleEntries: [], // [{daysMask, on:"HH:MM", off:"HH:MM"}]
 }));
+
+// Editor state for currently-selected relay's schedule
+// [{ daysMask:int, on:"HH:MM", off:"HH:MM" }]
+let scheduleEditorEntries = [];
 
 // Editor-local cyclic sequence: [{ relay, minutes, seconds }]
 const cyclicSeq = [];
@@ -112,21 +117,6 @@ function initUi() {
     b.addEventListener("click", () => selectRelay(i));
     relayGridEl.appendChild(b);
   }
-
-  DAYS.forEach((day) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "day-chip";
-    b.textContent = day;
-    b.dataset.day = day;
-    if (["Mon", "Tue", "Wed", "Thu", "Fri"].includes(day)) {
-      b.classList.add("active");
-    }
-    b.addEventListener("click", () => {
-      b.classList.toggle("active");
-    });
-    dayChipsEl.appendChild(b);
-  });
 
   // Cyclic day chips (independent from schedule chips)
   DAYS.forEach((day) => {
@@ -271,41 +261,119 @@ function selectRelay(relayNum) {
   updateSelectedRelayView();
 }
 
-function selectedDays() {
-  const chips = dayChipsEl.querySelectorAll(".day-chip.active");
-  return Array.from(chips).map((c) => c.dataset.day);
+// Day name <-> bit position (Sun=0, Mon=1, ..., Sat=6)
+const DAY_BITS = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+function daysMaskFromArray(arr) {
+  let m = 0;
+  arr.forEach((d) => { if (DAY_BITS[d] !== undefined) m |= (1 << DAY_BITS[d]); });
+  return m;
 }
 
+function daysMaskToArray(mask) {
+  return DAYS.filter((d) => (mask & (1 << DAY_BITS[d])) !== 0);
+}
+
+function daysMaskToString(mask) {
+  return daysMaskToArray(mask).join("");
+}
+
+// Parses one entry like "MonWedFri 08:00-20:00" or "Mon,Wed,Fri 08:00-20:00"
+function parseScheduleEntry(text) {
+  const m = text.trim().match(/^([A-Za-z,]+)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+  if (!m) return null;
+  const days = m[1].replace(/,/g, "").match(/(Sun|Mon|Tue|Wed|Thu|Fri|Sat)/g) || [];
+  const mask = daysMaskFromArray(days);
+  if (mask === 0) return null;
+  return { daysMask: mask, on: m[2], off: m[3] };
+}
+
+// scheduleText may be "None", "Mon 06:00-06:30; MonWedFri 20:00-21:00", etc.
 function parseScheduleText(text) {
   const clean = (text || "").trim();
-  const m = clean.match(/^([A-Za-z,]+)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
-  if (!m) return null;
-  return {
-    days: m[1].split(",").map((x) => x.trim()).filter(Boolean),
-    onTime: m[2],
-    offTime: m[3],
-  };
+  if (!clean || clean === "None" || clean === "Unused" || clean === "No data") return [];
+  return clean
+    .split(";")
+    .map((x) => parseScheduleEntry(x))
+    .filter(Boolean);
 }
 
-function reflectScheduleToControls(scheduleText) {
-  const parsed = parseScheduleText(scheduleText);
-  const chips = dayChipsEl.querySelectorAll(".day-chip");
+function renderScheduleEditor() {
+  scheduleIntervalsEl.innerHTML = "";
 
-  chips.forEach((c) => c.classList.remove("active"));
-
-  if (!parsed) {
-    onTimeEl.value = "";
-    offTimeEl.value = "";
+  if (scheduleEditorEntries.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.textContent = "No intervals. Click + Add Interval to create one.";
+    scheduleIntervalsEl.appendChild(empty);
     return;
   }
 
-  chips.forEach((c) => {
-    if (parsed.days.includes(c.dataset.day)) {
-      c.classList.add("active");
-    }
+  scheduleEditorEntries.forEach((entry, idx) => {
+    const row = document.createElement("div");
+    row.className = "interval-row";
+
+    const header = document.createElement("div");
+    header.className = "interval-header";
+    const label = document.createElement("span");
+    label.className = "interval-label";
+    label.textContent = `#${idx + 1}`;
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "secondary seq-btn";
+    del.textContent = "\u00d7";
+    del.addEventListener("click", () => {
+      scheduleEditorEntries.splice(idx, 1);
+      renderScheduleEditor();
+    });
+    header.appendChild(label);
+    header.appendChild(del);
+
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    DAYS.forEach((day) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "day-chip";
+      b.textContent = day;
+      if (entry.daysMask & (1 << DAY_BITS[day])) b.classList.add("active");
+      b.addEventListener("click", () => {
+        entry.daysMask ^= (1 << DAY_BITS[day]);
+        b.classList.toggle("active");
+      });
+      chips.appendChild(b);
+    });
+
+    const times = document.createElement("div");
+    times.className = "time-grid";
+    const lblOn = document.createElement("label");
+    lblOn.textContent = "ON";
+    const onInput = document.createElement("input");
+    onInput.type = "time";
+    onInput.value = entry.on;
+    onInput.addEventListener("change", () => { entry.on = onInput.value; });
+    lblOn.appendChild(onInput);
+    const lblOff = document.createElement("label");
+    lblOff.textContent = "OFF";
+    const offInput = document.createElement("input");
+    offInput.type = "time";
+    offInput.value = entry.off;
+    offInput.addEventListener("change", () => { entry.off = offInput.value; });
+    lblOff.appendChild(offInput);
+    times.appendChild(lblOn);
+    times.appendChild(lblOff);
+
+    row.appendChild(header);
+    row.appendChild(chips);
+    row.appendChild(times);
+    scheduleIntervalsEl.appendChild(row);
   });
-  onTimeEl.value = parsed.onTime;
-  offTimeEl.value = parsed.offTime;
+}
+
+function reflectScheduleToControls(scheduleText) {
+  const entries = parseScheduleText(scheduleText);
+  scheduleEditorEntries = entries.map((e) => ({ daysMask: e.daysMask, on: e.on, off: e.off }));
+  renderScheduleEditor();
 }
 
 function modePillClass(mode) {
@@ -501,19 +569,45 @@ function turnRelay(on) {
   setTimeout(fetchStatus, 500);
 }
 
+function addScheduleInterval() {
+  if (scheduleEditorEntries.length >= 8) {
+    log("Maximum 8 intervals per relay.");
+    return;
+  }
+  // Default: weekdays, 08:00-20:00
+  const defaultMask = daysMaskFromArray(["Mon", "Tue", "Wed", "Thu", "Fri"]);
+  scheduleEditorEntries.push({ daysMask: defaultMask, on: "08:00", off: "20:00" });
+  renderScheduleEditor();
+}
+
+function clearScheduleEditor() {
+  scheduleEditorEntries = [];
+  renderScheduleEditor();
+}
+
 function saveSchedule() {
-  const days = selectedDays();
-  if (days.length === 0) {
-    log("Pick at least one day.");
+  // Empty list -> send clear to device
+  if (scheduleEditorEntries.length === 0) {
+    publish(topicScheduleEl.value.trim(), `${selectedRelay} clear`);
+    setTimeout(fetchStatus, 500);
     return;
   }
 
-  if (!onTimeEl.value || !offTimeEl.value) {
-    log("ON/OFF times are required.");
-    return;
+  // Validate
+  for (let i = 0; i < scheduleEditorEntries.length; i += 1) {
+    const e = scheduleEditorEntries[i];
+    if (!e.daysMask) {
+      log(`Interval #${i + 1}: pick at least one day.`);
+      return;
+    }
+    if (!e.on || !e.off) {
+      log(`Interval #${i + 1}: ON/OFF times required.`);
+      return;
+    }
   }
 
-  const payload = `${selectedRelay} ${days.join(",")} ${onTimeEl.value}-${offTimeEl.value}`;
+  const parts = scheduleEditorEntries.map((e) => `${daysMaskToString(e.daysMask)} ${e.on}-${e.off}`);
+  const payload = `${selectedRelay} ${parts.join(";")}`;
   publish(topicScheduleEl.value.trim(), payload);
   setTimeout(fetchStatus, 500);
 }
@@ -668,6 +762,8 @@ turnOnBtn.addEventListener("click", () => turnRelay(true));
 turnOffBtn.addEventListener("click", () => turnRelay(false));
 fetchStatusBtn.addEventListener("click", fetchStatus);
 setScheduleBtn.addEventListener("click", saveSchedule);
+addIntervalBtn.addEventListener("click", addScheduleInterval);
+clearIntervalsBtn.addEventListener("click", clearScheduleEditor);
 if (enableNotifBtn) enableNotifBtn.addEventListener("click", enableNotifications);
 
 startTimerBtn.addEventListener("click", startTimer);

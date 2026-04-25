@@ -89,17 +89,14 @@
 
     <section class="card">
       <h2>Set Schedule</h2>
-      <div id="dayChips" class="chips"></div>
-      <div class="time-grid">
-        <label>ON
-          <input id="onTime" type="time" value="08:00" />
-        </label>
-        <label>OFF
-          <input id="offTime" type="time" value="20:00" />
-        </label>
+      <p class="hint">Add up to 8 ON/OFF windows for the selected relay. Each window has its own day selection.</p>
+      <div id="scheduleIntervals" class="interval-list"></div>
+      <div class="button-row">
+        <button id="addIntervalBtn" type="button" class="ghost">+ Add Interval</button>
+        <button id="clearIntervalsBtn" type="button" class="secondary">Clear</button>
       </div>
       <button id="setScheduleBtn">Save Schedule</button>
-      <p class="hint">Format sent: relay days HH:MM-HH:MM</p>
+      <p class="hint">Empty list + Save = clear schedule on device.</p>
     </section>
 
     <section class="card">
